@@ -27,12 +27,10 @@ module.exports = {
         const user = new User(input);
         return await user.save();
     },
-
     addProject: async ({ input }) => {
         const project = new Project(input);
         return await project.save();
     },
-
     addTodo: async ({ input }) => {
         const todo = new Todo({
             title: input.title,
@@ -48,33 +46,13 @@ module.exports = {
             .populate('projectId')
             .populate('assignedTo');
     },
-
-    // addTodo: async ({ input }) => {
-    //     const todo = new Todo({
-    //         title: input.title,
-    //         completed: input.completed || false,
-    //         projectId: input.projectId,
-    //         assignedTo: input.assignedTo
-    //     });
-    //     return await todo.save();
-    // },
-
     updateTodo: async ({ id, input }) => {
         return await Todo.findByIdAndUpdate(id, input, { new: true });
     },
-
     deleteTodo: async ({ id }) => {
         await Todo.findByIdAndDelete(id);
         return "Todo deleted";
     },
-
-    // Authentication logic can be added here if needed
-    // registerUser: async ({ input }) => {
-    //     const hashed = await bcrypt.hash(input.password, 10);
-    //     const user = new User({ ...input, password: hashed });
-    //     return await user.save();
-    // },
-
     registerUser: async ({ input }) => {
         const hashed = await bcrypt.hash(input.password, 10);
         const user = new User({
@@ -85,7 +63,6 @@ module.exports = {
         });
         return await user.save();
     },
-
     login: async ({ input }) => {
         const user = await User.findOne({ email: input.email });
         if (!user) throw new Error("User not found");
