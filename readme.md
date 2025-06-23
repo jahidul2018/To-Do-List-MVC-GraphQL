@@ -106,7 +106,7 @@ mutation {
   }
 }
 
-Create Project
+Create Project:
 
 mutation {
   addProject(input: {
@@ -118,7 +118,7 @@ mutation {
   }
 }
 
-Create Task
+Create Task:
 mutation {
   addTodo(input: {
     title: "Build GraphQL schema",

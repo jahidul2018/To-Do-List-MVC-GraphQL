@@ -40,8 +40,8 @@ module.exports = {
             projectId: input.projectId,
             assignedTo: input.assignedTo
         });
-        const saved = await todo.save();
-        return await saved.populate('projectId').populate('assignedTo');
+        const task = await todo.save();
+        return await task
     },
 
     // addTodo: async ({ input }) => {
