@@ -40,8 +40,13 @@ module.exports = {
             projectId: input.projectId,
             assignedTo: input.assignedTo
         });
-        const task = await todo.save();
-        return await task
+
+        const savedTodo = await todo.save();
+
+        // Re-fetch with populate
+        return await Todo.findById(savedTodo._id)
+            .populate('projectId')
+            .populate('assignedTo');
     },
 
     // addTodo: async ({ input }) => {
@@ -162,6 +167,50 @@ module.exports = {
 //       }
 //     }
 //   }
+
+// get to-do with project and assigned user:
+// mutation {
+//     addTodo(input: {
+//       title: "Build GraphQL schema",
+//       completed: false,
+//       projectId: "6859014f16e61dcbc97bd90b",
+//       assignedTo: "685900f6f64b973bce8922ad"
+//     }) {
+//       id
+//       title
+//       completed
+//       projectId{
+//         id
+//         name
+//         description
+//       }
+//       assignedTo{
+//         id
+//         name
+//         email
+//       }
+//     }
+//   }
+
+// get a specific to-do by ID:
+// query {
+//     getTodo(id: "68590440b976c4c2e71e9a44") {
+//       id
+//       title
+//       completed
+//       projectId {
+//         id
+//         name
+//         description
+//       }
+//       assignedTo {
+//         id
+//         name
+//         email
+//       }
+//     }
+//   }
+
 
 
 

@@ -6,6 +6,7 @@ const schema = require('./src/schemas');
 const resolvers = require('./src/resolvers');
 const authMiddleware = require('./src/middleware/auth');
 const app = express();
+const cors = require('cors');
 
 // MongoDB connection
 mongoose.connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true })
@@ -19,6 +20,7 @@ app.use('/graphql', graphqlHTTP({
     graphiql: true
 }));
 
+app.use(cors());
 // Middleware for authentication
 app.use(authMiddleware);
 // Basic route for health check
@@ -39,4 +41,3 @@ app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
 });
 
-// await mongoose.connect(process.env.MONGO_URI);
