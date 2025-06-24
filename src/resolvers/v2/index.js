@@ -1,9 +1,11 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
-const Todo = require('../models/Todo');
-const Project = require('../models/Project');
-const User = require('../models/User');
+const Todo = require('../../models/Todo');
+const Project = require('../../models/Project');
+const User = require('../../models/User');
+const { getTodosForUser } = require('../../services/todoService'); // Assuming this is the path to your service
+
 const mongoose = require('mongoose');
 // import { ObjectId } from 'mongodb';
 
@@ -19,14 +21,14 @@ const mongoose = require('mongoose');
 //     "assignedTo.role"
 // ];
 
-const buildGlobalSearchMatch = (search, fields) => {
-    const regex = new RegExp(search, "i");
-    return {
-        $or: fields.map(field => ({
-            [field]: { $regex: regex }
-        }))
-    };
-};
+// const buildGlobalSearchMatch = (search, fields) => {
+//     const regex = new RegExp(search, "i");
+//     return {
+//         $or: fields.map(field => ({
+//             [field]: { $regex: regex }
+//         }))
+//     };
+// };
 
 
 
@@ -308,100 +310,104 @@ module.exports = {
     //     };
     // },
 
-    getUserTodos: async ({ userId, page = 1, limit = 10, search = "", pagination = true }) => {
-        const skip = (page - 1) * limit;
-        const searchableFields = [
-            "title",
-            "description",
-            "status",
-            "projectId.name",
-            "projectId.code",
-            "projectId.title",
-            "projectId.description",
-            "assignedTo.name",
-            "assignedTo.email",
-            "assignedTo.role"
-        ];
+    // getUserTodos: async ({ userId, page = 1, limit = 10, search = "", pagination = true }) => {
+    //     const skip = (page - 1) * limit;
+    //     const searchableFields = [
+    //         "title",
+    //         "description",
+    //         "status",
+    //         "projectId.name",
+    //         "projectId.code",
+    //         "projectId.title",
+    //         "projectId.description",
+    //         "assignedTo.name",
+    //         "assignedTo.email",
+    //         "assignedTo.role"
+    //     ];
 
-        // Base pipeline that always applies
-        let pipeline = [
-            {
-                $match: {
-                    assignedTo: new mongoose.Types.ObjectId(userId)
-                }
-            },
-            {
-                $lookup: {
-                    from: 'projects',
-                    localField: 'projectId',
-                    foreignField: '_id',
-                    as: 'projectId'
-                }
-            },
-            { $unwind: { path: '$projectId', preserveNullAndEmptyArrays: true } },
-            {
-                $addFields: {
-                    "projectId.id": "$projectId._id"
-                }
-            },
-            {
-                $lookup: {
-                    from: 'users',
-                    localField: 'assignedTo',
-                    foreignField: '_id',
-                    as: 'assignedTo'
-                }
-            },
-            { $unwind: { path: '$assignedTo', preserveNullAndEmptyArrays: true } },
-            {
-                $addFields: {
-                    "assignedTo.id": "$assignedTo._id"
-                }
-            },
-            {
-                $addFields: {
-                    id: '$_id'
-                }
-            },
-            ...(search
-                ? [{ $match: buildGlobalSearchMatch(search, searchableFields) }]
-                : []
-            ),
-        ];
+    //     // Base pipeline that always applies
+    //     let pipeline = [
+    //         {
+    //             $match: {
+    //                 assignedTo: new mongoose.Types.ObjectId(userId)
+    //             }
+    //         },
+    //         {
+    //             $lookup: {
+    //                 from: 'projects',
+    //                 localField: 'projectId',
+    //                 foreignField: '_id',
+    //                 as: 'projectId'
+    //             }
+    //         },
+    //         { $unwind: { path: '$projectId', preserveNullAndEmptyArrays: true } },
+    //         {
+    //             $addFields: {
+    //                 "projectId.id": "$projectId._id"
+    //             }
+    //         },
+    //         {
+    //             $lookup: {
+    //                 from: 'users',
+    //                 localField: 'assignedTo',
+    //                 foreignField: '_id',
+    //                 as: 'assignedTo'
+    //             }
+    //         },
+    //         { $unwind: { path: '$assignedTo', preserveNullAndEmptyArrays: true } },
+    //         {
+    //             $addFields: {
+    //                 "assignedTo.id": "$assignedTo._id"
+    //             }
+    //         },
+    //         {
+    //             $addFields: {
+    //                 id: '$_id'
+    //             }
+    //         },
+    //         ...(search
+    //             ? [{ $match: buildGlobalSearchMatch(search, searchableFields) }]
+    //             : []
+    //         ),
+    //     ];
 
-        let todos;
-        let total;
-        let pages;
+    //     let todos;
+    //     let total;
+    //     let pages;
 
-        if (pagination) {
-            // If pagination is true, add the $facet stage
-            pipeline.push({
-                $facet: {
-                    data: [{ $skip: skip }, { $limit: limit }],
-                    totalCount: [{ $count: "count" }]
-                }
-            });
+    //     if (pagination) {
+    //         // If pagination is true, add the $facet stage
+    //         pipeline.push({
+    //             $facet: {
+    //                 data: [{ $skip: skip }, { $limit: limit }],
+    //                 totalCount: [{ $count: "count" }]
+    //             }
+    //         });
 
-            const result = await Todo.aggregate(pipeline);
-            todos = result[0].data;
-            total = result[0].totalCount[0]?.count || 0;
-            pages = Math.ceil(total / limit);
+    //         const result = await Todo.aggregate(pipeline);
+    //         todos = result[0].data;
+    //         total = result[0].totalCount[0]?.count || 0;
+    //         pages = Math.ceil(total / limit);
 
-        } else {
-            // If pagination is false, just execute the pipeline to get all matching todos
-            // without $facet, $skip, or $limit in the main aggregation
-            const result = await Todo.aggregate(pipeline);
-            todos = result; // All documents matching the criteria
-            total = todos.length; // Total is simply the count of results
-            pages = 1; // When no pagination, there's effectively 1 page
-        }
+    //     } else {
+    //         // If pagination is false, just execute the pipeline to get all matching todos
+    //         // without $facet, $skip, or $limit in the main aggregation
+    //         const result = await Todo.aggregate(pipeline);
+    //         todos = result; // All documents matching the criteria
+    //         total = todos.length; // Total is simply the count of results
+    //         pages = 1; // When no pagination, there's effectively 1 page
+    //     }
 
-        return {
-            todos,
-            total,
-            page,
-            pages
-        };
+    //     return {
+    //         todos,
+    //         total,
+    //         page,
+    //         pages
+    //     };
+    // },
+
+    getUserTodos: async () => {
+        return await getTodosForUser();
     },
 
     getUserProjects: async ({ userId }) => {

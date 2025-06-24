@@ -30,13 +30,34 @@ module.exports = buildSchema(`
   type Todo {
     id: ID!
     title: String!
+    description: String
+    dueDate: String
+    priority: String
+    tags: [String]
+    attachments: [String]
+    notes: [String]
+    subtasks: [Todo]
     completed: Boolean!
     projectId: Project
     assignedTo: User
   }
+  
+  type PaginatedTodos {
+    todos: [Todo!]!
+    total: Int!
+    page: Int!
+    pages: Int!
+  }
 
   input TodoInput {
     title: String!
+    description: String
+    dueDate: String
+    priority: String
+    tags: [String]
+    attachments: [String]
+    notes: [String]
+    subtasks: [TodoInput]
     completed: Boolean
     projectId: ID!
     assignedTo: ID!
@@ -48,6 +69,16 @@ module.exports = buildSchema(`
     getProjects: [Project]
     getProject(id: ID!): Project
     getUsers: [User]
+    getUser(id: ID!): User
+    getTotalTodos: Int
+    getTotalProjects: Int
+    getTotalUsers: Int
+    getCompletedTodos: Int
+    getPendingTodos: Int
+    getUserTodos(userId: ID!, page: Int, limit: Int, pagination: Boolean, search: String): PaginatedTodos
+    getUserTodosWithoutPagination(userId: ID!): [Todo]
+    getUserProjects(userId: ID!): [Project]
+
   }
 
   type Mutation {
