@@ -47,6 +47,7 @@ module.exports = buildSchema(`
     total: Int!
     page: Int!
     pages: Int!
+    message: String
   }
 
   input TodoInput {

@@ -431,7 +431,101 @@ module.exports = {
     // },
 
 
-    getUserTodos: async ({ userId, page = 1, limit = 10, search = "", pagination = true }) => {
+    // getUserTodos: async ({ userId, page = 1, limit = 10, search = "", pagination = true }) => {
+    //     const skip = (page - 1) * limit;
+
+    //     // Dynamically generate searchable fields
+    //     const searchableFields = getSearchableFields(
+    //         Todo,
+    //         EXCLUDED_TODO_FIELDS,
+    //         NESTED_SEARCHABLE_FIELDS
+    //     );
+
+    //     let pipeline = [
+    //         {
+    //             $match: {
+    //                 assignedTo: new mongoose.Types.ObjectId(userId)
+    //             }
+    //         },
+    //         {
+    //             $lookup: {
+    //                 from: 'projects',
+    //                 localField: 'projectId',
+    //                 foreignField: '_id',
+    //                 as: 'projectId'
+    //             }
+    //         },
+    //         { $unwind: { path: '$projectId', preserveNullAndEmptyArrays: true } },
+    //         {
+    //             $addFields: {
+    //                 "projectId.id": "$projectId._id"
+    //             }
+    //         },
+    //         {
+    //             $lookup: {
+    //                 from: 'users',
+    //                 localField: 'assignedTo',
+    //                 foreignField: '_id',
+    //                 as: 'assignedTo'
+    //             }
+    //         },
+    //         { $unwind: { path: '$assignedTo', preserveNullAndEmptyArrays: true } },
+    //         {
+    //             $addFields: {
+    //                 "assignedTo.id": "$assignedTo._id"
+    //             }
+    //         },
+    //         {
+    //             $addFields: {
+    //                 id: '$_id'
+    //             }
+    //         },
+    //         ...(search
+    //             ? [{ $match: buildGlobalSearchMatch(search, searchableFields) }]
+    //             : []
+    //         ),
+    //     ];
+
+    //     let todos;
+    //     let total;
+    //     let pages;
+
+    //     if (pagination) {
+    //         pipeline.push({
+    //             $facet: {
+    //                 data: [{ $skip: skip }, { $limit: limit }],
+    //                 totalCount: [{ $count: "count" }]
+    //             }
+    //         });
+
+    //         const result = await Todo.aggregate(pipeline);
+    //         todos = result[0].data;
+    //         total = result[0].totalCount[0]?.count || 0;
+    //         pages = Math.ceil(total / limit);
+    //         message = "Pagination applied, returning limited todos.";
+
+    //     } else {
+    //         const result = await Todo.aggregate(pipeline);
+    //         todos = result;
+    //         total = todos.length;
+    //         pages = 1;
+    //         message = "No pagination applied, returning all matching todos.";
+    //     }
+    //     return {
+    //         todos,
+    //         total,
+    //         page,
+    //         pages,
+    //         message
+    //     }
+    // },
+
+
+    getUserTodos: async ({ userId, page = 1,
+        limit = 10,
+        search = "",
+        pagination = true
+    }) => {
         const skip = (page - 1) * limit;
 
         // Dynamically generate searchable fields
@@ -440,6 +534,9 @@ module.exports = {
             EXCLUDED_TODO_FIELDS,
             NESTED_SEARCHABLE_FIELDS
         );
+
+        // console.log("Incoming Params:", { userId, page, limit, search, pagination });
+        // console.log("Searchable Fields:", searchableFields);
 
         let pipeline = [
             {
@@ -455,7 +552,12 @@ module.exports = {
                     as: 'projectId'
                 }
             },
-            { $unwind: { path: '$projectId', preserveNullAndEmptyArrays: true } },
+            {
+                $unwind: {
+                    path: '$projectId',
+                    preserveNullAndEmptyArrays: true
+                }
+            },
             {
                 $addFields: {
                     "projectId.id": "$projectId._id"
@@ -469,7 +571,12 @@ module.exports = {
                     as: 'assignedTo'
                 }
             },
-            { $unwind: { path: '$assignedTo', preserveNullAndEmptyArrays: true } },
+            {
+                $unwind: {
+                    path: '$assignedTo',
+                    preserveNullAndEmptyArrays: true
+                }
+            },
             {
                 $addFields: {
                     "assignedTo.id": "$assignedTo._id"
@@ -479,16 +586,20 @@ module.exports = {
                 $addFields: {
                     id: '$_id'
                 }
-            },
-            ...(search
-                ? [{ $match: buildGlobalSearchMatch(search, searchableFields) }]
-                : []
-            ),
+            }
         ];
 
-        let todos;
-        let total;
-        let pages;
+        // Add search filter if present
+        if (search) {
+            const searchMatch = buildGlobalSearchMatch(search, searchableFields);
+            // console.log("Search Match Condition:", JSON.stringify(searchMatch, null, 2));
+            pipeline.push({ $match: searchMatch });
+        }
+
+        let todos = [];
+        let total = 0;
+        let pages = 1;
+        let message = "";
 
         if (pagination) {
             pipeline.push({
@@ -499,11 +610,12 @@ module.exports = {
             });
 
             const result = await Todo.aggregate(pipeline);
-            todos = result[0].data;
-            total = result[0].totalCount[0]?.count || 0;
+            const facet = result[0] || { data: [], totalCount: [] };
+
+            todos = facet.data || [];
+            total = facet.totalCount?.[0]?.count || 0;
             pages = Math.ceil(total / limit);
             message = "Pagination applied, returning limited todos.";
-
         } else {
             const result = await Todo.aggregate(pipeline);
             todos = result;
@@ -511,14 +623,16 @@ module.exports = {
             pages = 1;
             message = "No pagination applied, returning all matching todos.";
         }
+
         return {
             todos,
             total,
             page,
             pages,
             message
-        }
+        };
     },
+
     getUserProjects: async ({ userId }) => {
         return await Project.find({ members: userId })
             .populate('members', 'name email');
