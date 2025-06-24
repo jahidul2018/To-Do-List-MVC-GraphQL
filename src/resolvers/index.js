@@ -7,6 +7,8 @@ const User = require('../models/User');
 const mongoose = require('mongoose');
 // import { ObjectId } from 'mongodb';
 
+const { buildGlobalSearchMatch, getSearchableFields } = require('../utils/search');
+
 // const searchableFields = [
 //     "title",
 //     "description",
@@ -19,14 +21,38 @@ const mongoose = require('mongoose');
 //     "assignedTo.role"
 // ];
 
-const buildGlobalSearchMatch = (search, fields) => {
-    const regex = new RegExp(search, "i");
-    return {
-        $or: fields.map(field => ({
-            [field]: { $regex: regex }
-        }))
-    };
-};
+
+// Define excluded fields (common ones that usually aren't searched)
+const EXCLUDED_TODO_FIELDS = [
+    // '_id',        // Mapped to 'id', usually not searched directly
+    '__v',        // Mongoose version key
+    'subtasks',   // Subtasks are often complex objects, better to search their individual fields if needed
+    'attachments',// File paths/URLs usually not text searchable
+    'notes',      // Can be long text, but if you want to search it, remove from here.
+    'dueDate',    // Date field, usually searched with date range queries, not text search
+    'priority',   // Enum, often filtered directly
+    'tags',       // Array, often filtered directly
+    'completed'   // Boolean, filtered directly
+];
+
+// Define nested fields from lookups that you want to be searchable
+const NESTED_SEARCHABLE_FIELDS = [
+    "projectId.name",
+    "projectId.code",
+    "projectId.description", // Assuming projectId.title is now projectId.description or similar based on your schema
+    "assignedTo.name",
+    "assignedTo.email",
+    "assignedTo.role"
+];
+
+// const buildGlobalSearchMatch = (search, fields) => {
+//     const regex = new RegExp(search, "i");
+//     return {
+//         $or: fields.map(field => ({
+//             [field]: { $regex: regex }
+//         }))
+//     };
+// };
 
 
 
@@ -308,22 +334,113 @@ module.exports = {
     //     };
     // },
 
+    // getUserTodos: async ({ userId, page = 1, limit = 10, search = "", pagination = true }) => {
+    //     const skip = (page - 1) * limit;
+    //     const searchableFields = [
+    //         "title",
+    //         "description",
+    //         "status",
+    //         "projectId.name",
+    //         "projectId.code",
+    //         "projectId.title",
+    //         "projectId.description",
+    //         "assignedTo.name",
+    //         "assignedTo.email",
+    //         "assignedTo.role"
+    //     ];
+
+    //     // Base pipeline that always applies
+    //     let pipeline = [
+    //         {
+    //             $match: {
+    //                 assignedTo: new mongoose.Types.ObjectId(userId)
+    //             }
+    //         },
+    //         {
+    //             $lookup: {
+    //                 from: 'projects',
+    //                 localField: 'projectId',
+    //                 foreignField: '_id',
+    //                 as: 'projectId'
+    //             }
+    //         },
+    //         { $unwind: { path: '$projectId', preserveNullAndEmptyArrays: true } },
+    //         {
+    //             $addFields: {
+    //                 "projectId.id": "$projectId._id"
+    //             }
+    //         },
+    //         {
+    //             $lookup: {
+    //                 from: 'users',
+    //                 localField: 'assignedTo',
+    //                 foreignField: '_id',
+    //                 as: 'assignedTo'
+    //             }
+    //         },
+    //         { $unwind: { path: '$assignedTo', preserveNullAndEmptyArrays: true } },
+    //         {
+    //             $addFields: {
+    //                 "assignedTo.id": "$assignedTo._id"
+    //             }
+    //         },
+    //         {
+    //             $addFields: {
+    //                 id: '$_id'
+    //             }
+    //         },
+    //         ...(search
+    //             ? [{ $match: buildGlobalSearchMatch(search, searchableFields) }]
+    //             : []
+    //         ),
+    //     ];
+
+    //     let todos;
+    //     let total;
+    //     let pages;
+
+    //     if (pagination) {
+    //         // If pagination is true, add the $facet stage
+    //         pipeline.push({
+    //             $facet: {
+    //                 data: [{ $skip: skip }, { $limit: limit }],
+    //                 totalCount: [{ $count: "count" }]
+    //             }
+    //         });
+
+    //         const result = await Todo.aggregate(pipeline);
+    //         todos = result[0].data;
+    //         total = result[0].totalCount[0]?.count || 0;
+    //         pages = Math.ceil(total / limit);
+
+    //     } else {
+    //         // If pagination is false, just execute the pipeline to get all matching todos
+    //         // without $facet, $skip, or $limit in the main aggregation
+    //         const result = await Todo.aggregate(pipeline);
+    //         todos = result; // All documents matching the criteria
+    //         total = todos.length; // Total is simply the count of results
+    //         pages = 1; // When no pagination, there's effectively 1 page
+    //     }
+
+    //     return {
+    //         todos,
+    //         total,
+    //         page,
+    //         pages
+    //     };
+    // },
+
+
     getUserTodos: async ({ userId, page = 1, limit = 10, search = "", pagination = true }) => {
         const skip = (page - 1) * limit;
-        const searchableFields = [
-            "title",
-            "description",
-            "status",
-            "projectId.name",
-            "projectId.code",
-            "projectId.title",
-            "projectId.description",
-            "assignedTo.name",
-            "assignedTo.email",
-            "assignedTo.role"
-        ];
 
-        // Base pipeline that always applies
+        // Dynamically generate searchable fields
+        const searchableFields = getSearchableFields(
+            Todo,
+            EXCLUDED_TODO_FIELDS,
+            NESTED_SEARCHABLE_FIELDS
+        );
+
         let pipeline = [
             {
                 $match: {
@@ -374,7 +491,6 @@ module.exports = {
         let pages;
 
         if (pagination) {
-            // If pagination is true, add the $facet stage
             pipeline.push({
                 $facet: {
                     data: [{ $skip: skip }, { $limit: limit }],
@@ -386,24 +502,23 @@ module.exports = {
             todos = result[0].data;
             total = result[0].totalCount[0]?.count || 0;
             pages = Math.ceil(total / limit);
+            message = "Pagination applied, returning limited todos.";
 
         } else {
-            // If pagination is false, just execute the pipeline to get all matching todos
-            // without $facet, $skip, or $limit in the main aggregation
             const result = await Todo.aggregate(pipeline);
-            todos = result; // All documents matching the criteria
-            total = todos.length; // Total is simply the count of results
-            pages = 1; // When no pagination, there's effectively 1 page
+            todos = result;
+            total = todos.length;
+            pages = 1;
+            message = "No pagination applied, returning all matching todos.";
         }
-
         return {
             todos,
             total,
             page,
-            pages
-        };
+            pages,
+            message
+        }
     },
-
     getUserProjects: async ({ userId }) => {
         return await Project.find({ members: userId })
             .populate('members', 'name email');
